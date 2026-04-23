@@ -1,0 +1,18 @@
+Location_Name,District,Risk_Type,Latitude,Longitude
+Silk Board Junction Waterlogging,Bengaluru Urban,Urban_Waterlogging,12.9176,77.6234
+Bellandur Lake Overflow Area,Bengaluru Urban,Urban_Waterlogging,12.9288,77.6698
+K.R. Puram Underpass,Bengaluru Urban,Urban_Waterlogging,13.0068,77.6855
+Mahadevapura IT Corridor,Bengaluru Urban,Urban_Waterlogging,12.9882,77.6974
+Rajarajeshwari Nagar (Vrishabhavathi),Bengaluru Urban,Urban_Waterlogging,12.9274,77.5156
+Mysuru Low-Lying Inner Basin,Mysuru,Urban_Waterlogging,12.3051,76.6412
+Rajapur Barrage Overflow,Belagavi,Riverine_Flood,16.5925,74.7745
+Krishna River Flats,Bagalkot,Riverine_Flood,16.1817,75.6958
+Tungabhadra River Basin,Raichur,Riverine_Flood,16.2160,77.3520
+Navalgund River Overflow,Dharwad,Riverine_Flood,15.5562,75.3622
+Kushalnagar Cauvery Banks,Kodagu,Riverine_Flood,12.4578,75.9620
+Bhagamandala Flood Zone,Kodagu,Flash_Flood,12.3886,75.5245
+Shirady Ghat Landslide Zone,Hassan,Flash_Flood,12.8465,75.6310
+Mangaluru Port & Beach Road,Dakshina Kannada,Coastal_Flood,12.8700,74.8315
+Udupi Bus Stand Waterlogging,Udupi,Coastal_Flood,13.3350,74.7450
+Malpe Port Inundation Area,Udupi,Coastal_Flood,13.3496,74.6997
+Gundibail Lowlands,Udupi,Coastal_Flood,13.3508,74.7441
