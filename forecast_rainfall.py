@@ -24,12 +24,13 @@ def forecast_district_rainfall(district_name="UDUPI"):
 
     print("Preparing data for Facebook Prophet...")
     # 2. Prophet REQUIRES exact column names: 'ds' (datestamp) and 'y' (target value)
-    # The historical dataset uses 'YEAR' and 'ANNUAL' for total rainfall.
-    prophet_df = district_df[['YEAR', 'ANNUAL']].copy()
-    prophet_df.rename(columns={'YEAR': 'ds', 'ANNUAL': 'y'}, inplace=True)
-    
+    # Aggregate daily Rainfall_mm into annual totals per year.
+    annual_df = district_df.groupby('YEAR', as_index=False)['Rainfall_mm'].sum()
+    annual_df.rename(columns={'YEAR': 'ds', 'Rainfall_mm': 'y'}, inplace=True)
+
     # Convert the raw year into a standard datetime format (e.g., 2010 becomes 2010-01-01)
-    prophet_df['ds'] = pd.to_datetime(prophet_df['ds'], format='%Y')
+    annual_df['ds'] = pd.to_datetime(annual_df['ds'], format='%Y')
+    prophet_df = annual_df
 
     print("Training the Prophet model...")
     # 3. Initialize and train the model

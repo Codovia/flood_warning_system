@@ -24,15 +24,19 @@ Key capabilities:
 
 ## Dependencies
 
-Recommended Python packages (create a virtualenv and install these):
+Install all required packages from the pinned `requirements.txt`:
 
-```
+```bash
 python -m venv venv
-source venv/bin/activate
-pip install streamlit pandas folium streamlit-folium joblib requests prophet matplotlib numpy scikit-learn
+source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-Note: the forecasting component uses `prophet` (PyPI package). On some systems you may need a C++ build toolchain or install `prophet` via conda.
+Note: the forecasting component uses `prophet` (PyPI package). On some systems you may need a C++ build toolchain or install `prophet` via conda:
+
+```bash
+conda install -c conda-forge prophet
+```
 
 ## Quick Start
 
@@ -79,7 +83,7 @@ Open the Streamlit URL (usually `http://localhost:8501`) to view the dashboard.
 	- Trains a `RandomForestClassifier` and writes the model to `models/random_forest_flood_model.pkl`.
 
 - Forecasting (`forecast_rainfall.py`):
-	- Reads aggregated annual rainfall (`YEAR` and `ANNUAL`) from `data/karnataka_flood_ready.csv`.
+	- Aggregates daily `Rainfall_mm` by `YEAR` to compute annual totals.
 	- Trains a `Prophet` model and forecasts the next 5 years. Writes CSV and PNG to `output/`.
 
 - Dashboard (`app.py`):
@@ -105,13 +109,21 @@ Open the Streamlit URL (usually `http://localhost:8501`) to view the dashboard.
 - If `prophet` install fails, try a conda environment: `conda install -c conda-forge prophet`
 - Streamlit errors: ensure `streamlit-folium` and `folium` are installed. If map rendering is blank, check that `data/karnataka_districts.geojson` exists.
 
-## Next steps & Suggestions
+## Running Tests
 
-- Add a `requirements.txt` to pin versions and simplify environment setup.
-- Add unit tests for preprocessing and model evaluation.
-- Add automated data-refresh and scheduler to keep `karnataka_flood_ready.csv` up-to-date.
+Unit tests cover the risk-level engineering logic (`preprocess_data.py`) and the model training / serialisation workflow (`train_model.py`).
+
+```bash
+# from the project root, with the virtualenv active
+pytest tests/ -v
+```
+
+## Next Steps & Suggestions
+
+- Extend multi-district support — add preprocessing and forecast scripts for additional Karnataka districts beyond UDUPI.
+- Add an automated data-refresh scheduler (cron job or systemd timer) to keep `karnataka_flood_ready.csv` and the trained model up-to-date.
+- Add alert notifications (email / SMS via Twilio or a webhook) when the dashboard detects High risk.
+- Containerise the application with Docker so the whole stack (`preprocess → train → serve`) can be reproduced in one command.
 
 ---
-
-If you'd like, I can add a `requirements.txt` and a simple systemd/tmux cron-runner script to automate data refresh and model retraining.
 
