@@ -4,8 +4,9 @@ folium==0.18.0
 streamlit-folium==0.24.0
 joblib==1.4.2
 requests==2.32.3
-prophet==1.1.6
+prophet==1.1.7
 matplotlib==3.10.1
 numpy==2.2.4
 scikit-learn==1.6.1
+cmdstanpy==1.2.5
 pytest==8.3.5
