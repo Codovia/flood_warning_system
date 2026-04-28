@@ -8,6 +8,14 @@ import json
 import requests
 from datetime import datetime
 
+DISTRICT_COORDS = {
+    'UDUPI': (13.3409, 74.7421),
+    'DAKSHINA KANNADA': (12.9141, 74.8560),
+    'UTTARA KANNADA': (14.7937, 74.6869),
+    'SHIVAMOGGA': (13.9299, 75.5681),
+    'BENGALURU URBAN': (12.9716, 77.5946),
+}
+
 # --- 1. Load Assets ---
 @st.cache_resource
 def load_model():
@@ -27,45 +35,38 @@ geojson_data = load_geojson()
 historical_df = load_historical_data()
 
 # --- 2. Live Data Integration ---
-def fetch_live_rainfall():
-    # Coordinates for Udupi
-    lat, lon = 13.3409, 74.7421
+def fetch_live_rainfall(district):
+    lat, lon = DISTRICT_COORDS[district]
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=rain_sum&timezone=auto"
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=20)
+        response.raise_for_status()
         data = response.json()
+        if 'daily' not in data or 'rain_sum' not in data['daily'] or len(data['daily']['rain_sum']) == 0:
+            raise ValueError("Unexpected API response format")
         # Get today's rainfall in mm
-        todays_rain = data['daily']['rain_sum'][0] 
+        todays_rain = data['daily']['rain_sum'][0]
         return todays_rain
-    except Exception as e:
+    except Exception:
         st.error("Failed to fetch live data. Please check your internet connection.")
         return 0.0
 
 # --- 3. Historical Context ---
-def get_historical_context(current_month_index):
-    months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
-    month_col = months[current_month_index - 1]
-    
-    # Filter for Udupi region
-    udupi_history = historical_df[historical_df['DISTRICT'] == 'UDUPI'].copy()
-    
-    if udupi_history.empty:
-        return None, month_col
-    
-    # Extract month from the Date column and filter for the current month
-    udupi_history['Date'] = pd.to_datetime(udupi_history['Date'], errors='coerce')
-    udupi_history = udupi_history[udupi_history['Date'].dt.month == current_month_index]
-    
-    if udupi_history.empty:
-        return None, month_col
-    
-    # Aggregate total rainfall per year for this month
-    monthly_totals = udupi_history.groupby('YEAR')['Rainfall_mm'].sum().reset_index()
-    monthly_totals.columns = ['YEAR', month_col]
-    
-    # Find the top 3 wettest years for the current month
-    top_years = monthly_totals.sort_values(by=month_col, ascending=False).head(3)
-    return top_years, month_col
+def get_historical_context(current_month_index, district):
+    district_history = historical_df[historical_df['DISTRICT'].str.upper() == district.upper()].copy()
+
+    if district_history.empty:
+        return None
+
+    district_history['Date'] = pd.to_datetime(district_history['Date'], errors='coerce')
+    district_history = district_history[district_history['Date'].dt.month == current_month_index]
+
+    if district_history.empty:
+        return None
+
+    monthly_totals = district_history.groupby('YEAR')['Rainfall_mm'].sum().reset_index()
+    top_years = monthly_totals.sort_values(by='Rainfall_mm', ascending=False).head(3)
+    return top_years
 
 # --- 4. Dashboard UI Setup ---
 st.set_page_config(page_title="Live AI Flood Warning System", layout="wide")
@@ -77,6 +78,7 @@ st.markdown(f"**Live Dashboard Status:** Active | **Date:** {today.strftime('%B 
 
 # --- Sidebar Controls ---
 st.sidebar.header("Data Feed")
+selected_district = st.sidebar.selectbox("District", sorted(DISTRICT_COORDS.keys()), index=0)
 data_source = st.sidebar.radio("Select Data Source:", ["Live Satellite Data", "Manual Input"])
 
 rainfall_to_predict = 0.0
@@ -84,9 +86,10 @@ rainfall_to_predict = 0.0
 if data_source == "Live Satellite Data":
     if st.sidebar.button("Fetch Real-Time Data"):
         with st.spinner("Connecting to weather satellites..."):
-            rainfall_to_predict = fetch_live_rainfall()
-            st.sidebar.success(f"Live Data Retrieved! Today's Rain: {rainfall_to_predict} mm")
+            rainfall_to_predict = fetch_live_rainfall(selected_district)
+            st.sidebar.success(f"Live Data Retrieved! Today's Rain in {selected_district}: {rainfall_to_predict} mm")
             st.session_state['display_rain'] = rainfall_to_predict
+            st.session_state['live_updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 else:
     manual_input = st.sidebar.number_input("Forecasted Daily Rainfall (mm)", min_value=0.0, max_value=500.0, value=150.0, step=10.0)
     st.session_state['display_rain'] = manual_input
@@ -103,7 +106,8 @@ if 'display_rain' in st.session_state:
     
     with col1:
         # --- ML Prediction ---
-        input_df = pd.DataFrame({'Rainfall_mm': [display_rain], 'Soil_Moisture': [soil_moisture_val]})
+        soil_moisture_ratio = soil_moisture_val / 100.0
+        input_df = pd.DataFrame({'Rainfall_mm': [display_rain], 'Soil_Moisture': [soil_moisture_ratio]})
         prediction = model.predict(input_df)[0]
         
         st.subheader("🚨 Risk Assessment")
@@ -117,6 +121,12 @@ if 'display_rain' in st.session_state:
         else:
             st.success(f"**LOW RISK**")
             map_color = "green"
+
+        if hasattr(model, 'predict_proba'):
+            proba = model.predict_proba(input_df)[0]
+            labels = model.classes_
+            confidence = {label: round(float(score) * 100, 2) for label, score in zip(labels, proba)}
+            st.caption(f"Prediction confidence: {confidence}")
 
         # --- Geospatial Mapping ---
         # Center map to overview all of Karnataka
@@ -157,21 +167,24 @@ if 'display_rain' in st.session_state:
             except Exception as e:
                 st.error(f"Error loading hotspot data: {e}")
                 
-        st_folium(m, width=600, height=400)
+        st_folium(m, height=450, use_container_width=True)
 
     with col2:
         # --- Historical Comparison ---
         st.subheader("📖 Historical Context")
-        st.info(f"Looking back at the month of **{today.strftime('%B')}**...")
+        st.info(f"Looking back at the month of **{today.strftime('%B')}** for **{selected_district}**...")
         
-        top_historical, month_name = get_historical_context(today.month)
+        top_historical = get_historical_context(today.month, selected_district)
         
         if top_historical is not None:
-            st.markdown(f"**Worst flooding years for {month_name}:**")
+            st.markdown("**Wettest years for this month:**")
             for index, row in top_historical.iterrows():
-                st.markdown(f"- **{int(row['YEAR'])}:** {row[month_name]} mm of rain")
+                st.markdown(f"- **{int(row['YEAR'])}:** {row['Rainfall_mm']:.1f} mm of rain")
         else:
             st.write("No historical data available for this region.")
+
+        if 'live_updated_at' in st.session_state:
+            st.caption(f"Last live data refresh: {st.session_state['live_updated_at']}")
             
         st.markdown("---")
         st.markdown("**How this compares:**")

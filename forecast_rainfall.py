@@ -22,24 +22,34 @@ def forecast_district_rainfall(district_name="UDUPI"):
         print(f"No data found for {district_name}. Check spelling or dataset.")
         return
 
-    print("Preparing data for Facebook Prophet...")
-    # 2. Prophet REQUIRES exact column names: 'ds' (datestamp) and 'y' (target value)
-    # The historical dataset uses 'YEAR' and 'ANNUAL' for total rainfall.
-    prophet_df = district_df[['YEAR', 'ANNUAL']].copy()
-    prophet_df.rename(columns={'YEAR': 'ds', 'ANNUAL': 'y'}, inplace=True)
+    print("Preparing annual aggregates for Prophet...")
+    if 'Date' not in district_df.columns:
+        print("Error: Date column missing in preprocessed dataset.")
+        return
+
+    district_df['Date'] = pd.to_datetime(district_df['Date'], errors='coerce')
+    district_df = district_df.dropna(subset=['Date'])
+    annual_df = district_df.groupby(district_df['Date'].dt.year)['Rainfall_mm'].sum().reset_index()
+    annual_df.columns = ['YEAR', 'ANNUAL']
+
+    if annual_df['YEAR'].nunique() < 3:
+        print("Error: Need at least 3 years of annual rainfall to run forecasting.")
+        return
+
+    prophet_df = annual_df.rename(columns={'YEAR': 'ds', 'ANNUAL': 'y'})
     
     # Convert the raw year into a standard datetime format (e.g., 2010 becomes 2010-01-01)
     prophet_df['ds'] = pd.to_datetime(prophet_df['ds'], format='%Y')
 
     print("Training the Prophet model...")
     # 3. Initialize and train the model
-    model = Prophet(yearly_seasonality=True, daily_seasonality=False, weekly_seasonality=False)
+    model = Prophet(yearly_seasonality=False, daily_seasonality=False, weekly_seasonality=False)
     model.fit(prophet_df)
 
     print("Forecasting the next 5 years...")
     # 4. Generate future dates and predict
-    # periods=5 means 5 steps into the future. freq='YE' stands for Year End.
-    future = model.make_future_dataframe(periods=5, freq='YE')
+    # periods=5 means 5 years into the future.
+    future = model.make_future_dataframe(periods=5, freq='Y')
     forecast = model.predict(future)
 
     # 5. Save the numerical forecast data

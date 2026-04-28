@@ -1,117 +1,208 @@
 # Flood Warning System
 
-Live AI-based flood risk & early warning system for Karnataka (example focused on Udupi district).
+AI-assisted flood risk warning and rainfall forecasting for Karnataka districts, with a Streamlit dashboard and geospatial risk visualization.
 
-## Overview
+## Current Project Features
 
-This project collects modern satellite weather data, preprocesses it, trains a machine-learning classifier to predict short-term flood risk levels (High / Medium / Low), and provides a Streamlit dashboard with geospatial visualisations and live API integration.
-
-Key capabilities:
-- Fetch daily rainfall and soil moisture via the Open-Meteo API (preprocessing).
-- Build a Random Forest classifier that predicts `Risk_Level` from `Rainfall_mm` and `Soil_Moisture`.
-- Forecast annual rainfall using Prophet and export numerical and visual forecasts.
-- Interactive Streamlit dashboard with Folium maps, heatmaps and marker clusters for hotspots.
+1. Data ingestion from Open-Meteo archive API for daily rainfall and soil moisture.
+2. Multi-district preprocessing pipeline with engineered flood risk labels.
+3. Random Forest risk classification model using rainfall and soil moisture features.
+4. Time-series rainfall forecasting using Prophet with per-district annual aggregates.
+5. Live dashboard with district selector, manual/live input modes, hotspot map layers, and historical context.
+6. Prediction confidence display (class probabilities) when model supports `predict_proba`.
+7. Automated tests and CI workflow for quick regression checks.
 
 ## Repository Structure
 
-- `app.py` — Streamlit dashboard (main UI). Uses the trained model at `models/random_forest_flood_model.pkl` and GeoJSON + CSV data in `data/`.
-- `preprocess_data.py` — Downloads and prepares modern daily weather (2010–2024) and creates `data/karnataka_flood_ready.csv`.
-- `train_model.py` — Trains a Random Forest classifier and saves it to `models/random_forest_flood_model.pkl`.
-- `forecast_rainfall.py` — Uses Prophet to forecast annual rainfall and writes outputs to `output/`.
-- `data/` — Input data: `karnataka_districts.geojson`, `karnataka_flood_hotspots.csv`, `karnataka_flood_ready.csv`, `rainfall_in_india_1901-2015.csv`.
-- `models/` — Saved model artifacts (Random Forest pickle).
-- `output/` — Forecast CSVs and plots (e.g., `UDUPI_forecast.csv`).
+- `app.py`: Streamlit dashboard and live risk prediction workflow.
+- `preprocess_data.py`: Data ingestion, cleaning, and risk-label generation.
+- `train_model.py`: Model training, evaluation, and metrics artifact export.
+- `forecast_rainfall.py`: District-level annual aggregation and Prophet forecasting.
+- `requirements.txt`: Pinned dependencies.
+- `tests/`: Unit tests for preprocessing and forecast data preparation.
+- `.github/workflows/ci.yml`: CI pipeline that installs dependencies and runs tests.
+- `data/`: Input datasets and generated preprocessed dataset.
+- `models/`: Trained model and training metrics JSON.
+- `output/`: Forecast CSV/plot outputs.
 
-## Dependencies
+## Fix Log (Applied One by One)
 
-Recommended Python packages (create a virtualenv and install these):
+### Fix 1: Forecasting schema mismatch (Done)
 
-```
-python -m venv venv
+Problem:
+Forecasting expected `ANNUAL` in preprocessed data, but preprocessing produced only daily rows.
+
+Fix:
+Updated `forecast_rainfall.py` to aggregate daily `Rainfall_mm` into annual totals per district and added validation for minimum historical years before running Prophet.
+
+Result:
+Forecasting no longer depends on a missing `ANNUAL` column.
+
+### Fix 2: Soil moisture scale mismatch (Done)
+
+Problem:
+Model trained on soil moisture ratio values (0.0 to 1.0), while dashboard input was 0 to 100.
+
+Fix:
+Dashboard now converts UI percentage to ratio (`value / 100.0`) before prediction.
+
+Result:
+Inference input distribution matches training distribution.
+
+### Fix 3: Time leakage in model validation (Done)
+
+Problem:
+Random split can overestimate performance for time-dependent weather data.
+
+Fix:
+Replaced random split with chronological 80/20 split in `train_model.py` and added balanced accuracy plus metrics export (`models/model_metrics.json`).
+
+Result:
+Evaluation now better reflects real future forecasting conditions.
+
+### Fix 4: API reliability and error handling (Done)
+
+Problem:
+API calls had limited timeout/schema protection.
+
+Fix:
+Added request timeout and schema checks in dashboard live fetch, plus a retry-capable API fetch helper in preprocessing.
+
+Result:
+Better resilience to transient network/API issues.
+
+### Fix 5: Single-district data limitation (Partially Improved)
+
+Problem:
+Training data pipeline originally pulled only Udupi.
+
+Fix:
+Preprocessing now supports multiple Karnataka districts via coordinate map, and dashboard includes district selector for live inference and historical context.
+
+Result:
+Project is now district-aware for selected configured districts.
+
+Note:
+Full statewide coverage still needs a complete district coordinate list and broader data collection strategy.
+
+### Fix 6: Reproducibility and dependency management (Done)
+
+Problem:
+No pinned environment spec.
+
+Fix:
+Added `requirements.txt` with pinned package versions.
+
+Result:
+Faster and more reproducible setup.
+
+### Fix 7: Tests and CI quality gate (Done)
+
+Problem:
+No automated tests/validation pipeline.
+
+Fix:
+Added unit tests for risk-label logic and annual aggregation prep, and added GitHub Actions CI workflow to run tests on push and PR.
+
+Result:
+Basic regression safety net is in place.
+
+### Fix 8: Dashboard UX clarity (Done)
+
+Problem:
+No confidence visibility and limited traceability of live refresh.
+
+Fix:
+Added prediction confidence display and last live refresh timestamp, and improved map responsiveness using container width.
+
+Result:
+Better trust and readability for operators.
+
+### Fix 9: Documentation mismatch (Done)
+
+Problem:
+Previous README described behaviors not aligned with actual data flow.
+
+Fix:
+Rewrote README to match current architecture and implementation.
+
+Result:
+Documentation now reflects real execution flow.
+
+### Fix 10: Ground-truth flood label realism (Not Fully Solved)
+
+Problem:
+Current `Risk_Level` target is rule-engineered from weather thresholds.
+
+Status:
+This is a data availability problem, not just a code bug.
+
+Recommended next step:
+Integrate true historical flood incident labels from government/disaster records and retrain with observed outcomes.
+
+## Project Analysis Summary
+
+### Strengths
+
+1. Clear end-to-end pipeline from ingestion to dashboard prediction.
+2. Fast local iteration with lightweight model and scripts.
+3. Good geospatial communication for hotspot awareness.
+
+### Risks / Gaps Remaining
+
+1. Ground-truth target labels are still synthetic.
+2. District coverage remains limited to configured coordinates.
+3. No scheduler yet for automated periodic refresh + retraining.
+4. No integration/e2e dashboard tests yet.
+
+## Setup
+
+```bash
+python3 -m venv venv
 source venv/bin/activate
-pip install streamlit pandas folium streamlit-folium joblib requests prophet matplotlib numpy scikit-learn
+pip install -r requirements.txt
 ```
 
-Note: the forecasting component uses `prophet` (PyPI package). On some systems you may need a C++ build toolchain or install `prophet` via conda.
+## Run Sequence
 
-## Quick Start
-
-1. Prepare environment (see Dependencies above).
-2. Fetch modern satellite-derived dataset (creates `data/karnataka_flood_ready.csv`):
+1. Build/refresh dataset:
 
 ```bash
-python preprocess_data.py
+python3 preprocess_data.py
 ```
 
-3. Train the Random Forest model (saves to `models/random_forest_flood_model.pkl`):
+1. Train model:
 
 ```bash
-python train_model.py
+python3 train_model.py
 ```
 
-4. Forecast annual rainfall for a district (defaults to UDUPI):
+1. Generate rainfall forecast:
 
 ```bash
-python forecast_rainfall.py
-# Outputs: output/UDUPI_forecast.csv and output/UDUPI_forecast_plot.png
+python3 forecast_rainfall.py
 ```
 
-5. Run the interactive dashboard:
+1. Start dashboard:
 
 ```bash
 streamlit run app.py
 ```
 
-Open the Streamlit URL (usually `http://localhost:8501`) to view the dashboard.
+1. Run tests:
 
-## How it Works — Technical Details
+```bash
+pytest -q tests
+```
 
-- Preprocessing (`preprocess_data.py`):
-	- Calls Open-Meteo archive API for daily `rain_sum` and `soil_moisture_0_to_7cm_mean` for Udupi coordinates.
-	- Drops missing days and engineers a `Risk_Level` column using threshold logic:
-		- `High` if heavy rainfall or high soil moisture combined with moderate rain
-		- `Medium` for moderate rain
-		- `Low` otherwise
-	- Adds `DISTRICT` and `YEAR` (used by Prophet and other scripts).
+## Validation
 
-- Training (`train_model.py`):
-	- Loads `data/karnataka_flood_ready.csv` and uses features `['Rainfall_mm','Soil_Moisture']` to predict `Risk_Level`.
-	- Trains a `RandomForestClassifier` and writes the model to `models/random_forest_flood_model.pkl`.
+- Local tests: `3 passed`
+- Model metrics artifact: `models/model_metrics.json`
 
-- Forecasting (`forecast_rainfall.py`):
-	- Reads aggregated annual rainfall (`YEAR` and `ANNUAL`) from `data/karnataka_flood_ready.csv`.
-	- Trains a `Prophet` model and forecasts the next 5 years. Writes CSV and PNG to `output/`.
+## Suggested Next Enhancements
 
-- Dashboard (`app.py`):
-	- Loads model, geojson boundaries and historical dataset.
-	- Allows selection between live API rainfall (Open-Meteo) or manual input.
-	- Predicts flood risk and visualizes results on a Folium map with heatmap & markers when `High` risk is detected.
-	- Shows historical context for the current month.
-
-## Data Sources
-
-- Open-Meteo (archive & forecast endpoints) — used for live and historical daily weather data.
-- Local CSVs in `data/` (hotspots, geojson boundaries, historical aggregated CSV).
-
-## Outputs
-
-- `models/random_forest_flood_model.pkl` — Saved model used by the dashboard.
-- `data/karnataka_flood_ready.csv` — Preprocessed daily dataset including `Rainfall_mm`, `Soil_Moisture`, `Risk_Level`, `DISTRICT`, `YEAR`.
-- `output/*` — Forecast CSVs and plot images generated by `forecast_rainfall.py`.
-
-## Troubleshooting
-
-- If `preprocess_data.py` fails to fetch API data, check internet connectivity and the Open-Meteo endpoint limits.
-- If `prophet` install fails, try a conda environment: `conda install -c conda-forge prophet`
-- Streamlit errors: ensure `streamlit-folium` and `folium` are installed. If map rendering is blank, check that `data/karnataka_districts.geojson` exists.
-
-## Next steps & Suggestions
-
-- Add a `requirements.txt` to pin versions and simplify environment setup.
-- Add unit tests for preprocessing and model evaluation.
-- Add automated data-refresh and scheduler to keep `karnataka_flood_ready.csv` up-to-date.
-
----
-
-If you'd like, I can add a `requirements.txt` and a simple systemd/tmux cron-runner script to automate data refresh and model retraining.
-
+1. Add a scheduled job for periodic data refresh + retraining.
+2. Add alert channels (SMS/Email/WhatsApp) for `High` risk predictions.
+3. Add feature engineering from lag rainfall, rolling windows, and upstream catchment signals.
+4. Add calibration plots and threshold tuning for operational deployment.
